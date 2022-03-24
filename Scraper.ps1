@@ -165,6 +165,8 @@ function GetPluginPage {
 
         # call the href that was in the javascript
         $secondResponse = Invoke-WebRequest -Uri $extractedHref -WebSession $session | ConvertFrom-Html
+		
+		#TODO if the plugin is at Support Level "Platinum Only" which we don't have, then the link will send us to a forbidden page that will fail parsing for the hidden "a" tag below
 
         # extract final HREF
         # ex. https://nextgen-aws-salesforce-prod-sdrive-us-east-2.s3.us-east-2.amazonaws.com/a9o4y000000YId9AAG/ldap-3.12.0.b1752.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2ZO6ZFSFWXJS7NWF%2F20220318%2Fus-east-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20220318T051704Z&amp;X-Amz-Expires=216000&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=962a48d81f6091b86855eb2041df9bd0ba3123479ac87cc860bc061aa82edaff
