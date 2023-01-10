@@ -33,6 +33,9 @@ $PluginNames = @()
 # plugin version to download
 $PluginVersion = "4.2"
 
+#do you also want to download the plugin's user guide?
+$IncludeAttachments = $false
+
 #hard-coded UUID within 1Password account
 $1PASS_UUID = 'j5m7piroikq3dznzojyjmodyja'
 
@@ -293,7 +296,7 @@ function Start-Scrape {
 
         $pluginLinks = Select-PluginLinks
         
-        $pluginLinks | Read-PluginPage -IncludeAttachments
+        $pluginLinks | Read-PluginPage -IncludeAttachments:$IncludeAttachments
     }
 
     end {

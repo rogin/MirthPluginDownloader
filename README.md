@@ -1,5 +1,7 @@
 # Mirth (NextGen Connect) plugin downloader
 
+Downloads NextGen's commercial plugins from their site.
+
 Has the following features
 
 - Downloads your specified version of Mirth plugins (ex. 4.2)
@@ -17,5 +19,6 @@ Has the following features
 
 1. Edit desired plugin version
 2. Edit list of plugins to download (an empty list means all)
-3. Edit $1PASS_UUID or override function ObtainCredentials to obtain login creds
-4. Run Scraper.ps1, files will download into current directory
+3. Edit $IncludeAttachments toggling the additional download of the plugins' user guides
+4. Edit $1PASS_UUID _or_ override function ObtainCredentials to provide your login creds
+5. Run Scraper.ps1, files will download into current directory
