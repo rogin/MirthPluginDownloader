@@ -14,6 +14,7 @@ Has the following features
 
 1. PS v6+
 2. module _powerhtml_
+3. An active NextGen subscription
 
 ## Usage
 
