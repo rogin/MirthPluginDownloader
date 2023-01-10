@@ -192,7 +192,8 @@ function Read-PluginPage {
             Write-Warning "Could not find href value for $($Node.InnerText) - you likely don't have the correct support level, skipping"
         } else {
             #noticed this wall with 'Mirth Results Connector' and 'Health Data Hub Connector'
-            if($href -match 'salesforce.com') {
+            #check for nextgenhealthcare.lightning.force.com which redirects to salesforce.com
+            if($href -match 'lightning.force.com') {
                 Write-Warning "Unable to download plugin $($Node.InnerText) as it requires a salesforce.com account, skipping"
             } else {
                 $href = $BaseUrl + $href
