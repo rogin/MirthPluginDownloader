@@ -186,65 +186,72 @@ function Read-PluginPage {
     Process {
         Write-Verbose "Processing '$($Node.InnerText)', `$IncludeAttachments=$IncludeAttachments"
 
-        $href = $BaseUrl + $Node.GetAttributeValue('href', 'missing-href-value-1')
-        
+        $href = $Node.GetAttributeValue('href', 'missing-href-value-1')
+
         if($href -eq 'missing-href-value-1') {
             Write-Warning "Could not find href value for $($Node.InnerText) - you likely don't have the correct support level, skipping"
         } else {
-            Write-Debug "Invoking plugin `$href=$href"
-            $WebContent = Invoke-WebRequest -Uri $href -WebSession $session | ConvertFrom-Html
-
-            $pluginDownloadLinks = $WebContent.SelectNodes("(//div[@class='pbSubsection'])[6]//table[@class='htmlDetailElementTable']//td//a")
-
-            #example text: "Advanced Alerting  Plug-in 4.2"
-            $pluginDownloadLinks = @($pluginDownloadLinks | Where-Object {$_.InnerText.Trim().EndsWith($PluginVersion)})
-
-            Write-Verbose "Found $($pluginDownloadLinks.Count) links matching version '$PluginVersion'"
-            
-            if($pluginDownloadLinks.Count -eq 0) {
-                Write-Warning "Failed to find version '$PluginVersion' of $($Node.InnerText)"
-            } elseif($pluginDownloadLinks.Count -gt 1) {
-                Write-Error "Found $($pluginDownloadLinks.Count) download links for version '$PluginVersion' of $($Node.InnerText), expected 1"
+            #noticed this wall with 'Mirth Results Connector' and 'Health Data Hub Connector'
+            if($href -match 'salesforce.com') {
+                Write-Warning "Unable to download plugin $($Node.InnerText) as it requires a salesforce.com account, skipping"
             } else {
-                $NameAndVersion = $pluginDownloadLinks[0].InnerText.Trim()
+                $href = $BaseUrl + $href
 
-                #ex. https://www.community.nextgen.com/apex/ResourceRepository?fileId=a9o4y000000YIdT
-                $downloadUrl = $pluginDownloadLinks[0].GetAttributeValue('href', 'missing-href-value-2')
+                Write-Debug "Invoking plugin `$href=$href"
+                $WebContent = Invoke-WebRequest -Uri $href -WebSession $session | ConvertFrom-Html
 
-                Write-Debug "Beginning download of plugin '$NameAndVersion' from $downloadUrl"
+                $pluginDownloadLinks = $WebContent.SelectNodes("(//div[@class='pbSubsection'])[6]//table[@class='htmlDetailElementTable']//td//a")
 
-                $downloadResponse = Invoke-WebRequest -Uri $downloadUrl -WebSession $session
-                #parse window.location.href from javascript in $downloadResponse.Content
-                #ex. /DownloadSuccess?fileId=a9o4y000000YId9
-                Write-Debug "Parsing javascript"
-                $extractedHref = $BaseUrl + (parseJavascript $downloadResponse.Content ";")
+                #example text: "Advanced Alerting  Plug-in 4.2"
+                $pluginDownloadLinks = @($pluginDownloadLinks | Where-Object {$_.InnerText.Trim().EndsWith($PluginVersion)})
 
-                Write-Debug "Invoking $extractedHref"
-
-                # call the href that was in the javascript
-                $secondResponse = Invoke-WebRequest -Uri $extractedHref -WebSession $session | ConvertFrom-Html
+                Write-Verbose "Found $($pluginDownloadLinks.Count) links matching version '$PluginVersion'"
                 
-                #if the plugin is at Support Level "Platinum Only", of which I don't have,
-                #then the link will send us to a forbidden page that will fail parsing for the hidden "a" tag below.
-                $hiddenLink = $secondResponse.SelectSingleNode("//a[@class='hidden']")
-
-                if($null -eq $hiddenLink) {
-                    Write-Warning "Failed to find download link - you likely don't have the correct support level, skipping"
+                if($pluginDownloadLinks.Count -eq 0) {
+                    Write-Warning "Failed to find version '$PluginVersion' of $($Node.InnerText)"
+                } elseif($pluginDownloadLinks.Count -gt 1) {
+                    Write-Error "Found $($pluginDownloadLinks.Count) download links for version '$PluginVersion' of $($Node.InnerText), expected 1"
                 } else {
-                    # extract final HREF
-                    # ex. https://nextgen-aws-salesforce-prod-sdrive-us-east-2.s3.us-east-2.amazonaws.com/a9o4y000000YId9AAG/ldap-3.12.0.b1752.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2ZO6ZFSFWXJS7NWF%2F20220318%2Fus-east-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20220318T051704Z&amp;X-Amz-Expires=216000&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=962a48d81f6091b86855eb2041df9bd0ba3123479ac87cc860bc061aa82edaff
-                    $extractedHref = $hiddenLink.GetAttributeValue('href', 'missing-href-value-3')
-                    Write-Debug "Found `$hiddenLink with `$extractedHref=$extractedHref"
+                    $NameAndVersion = $pluginDownloadLinks[0].InnerText.Trim()
 
-                    Write-Debug "Decoding `$extractedHref"
-                    # decode this or else the AWS call will fail
-                    [uri]$decodedHref = [System.Web.HttpUtility]::HtmlDecode($extractedHref)
-                    # extract filename
-                    $filename = $decodedHref.Segments[-1]
+                    #ex. https://www.community.nextgen.com/apex/ResourceRepository?fileId=a9o4y000000YIdT
+                    $downloadUrl = $pluginDownloadLinks[0].GetAttributeValue('href', 'missing-href-value-2')
 
-                    Write-Debug "Downloading plugin '$filename' from $($decodedHref.AbsoluteUri)"
+                    Write-Debug "Beginning download of plugin '$NameAndVersion' from $downloadUrl"
 
-                    Invoke-WebRequest -Uri $decodedHref.AbsoluteUri -OutFile $filename
+                    $downloadResponse = Invoke-WebRequest -Uri $downloadUrl -WebSession $session
+                    #parse window.location.href from javascript in $downloadResponse.Content
+                    #ex. /DownloadSuccess?fileId=a9o4y000000YId9
+                    Write-Debug "Parsing javascript"
+                    $extractedHref = $BaseUrl + (parseJavascript $downloadResponse.Content ";")
+
+                    Write-Debug "Invoking $extractedHref"
+
+                    # call the href that was in the javascript
+                    $secondResponse = Invoke-WebRequest -Uri $extractedHref -WebSession $session | ConvertFrom-Html
+                    
+                    #if the plugin is at Support Level "Platinum Only", of which I don't have,
+                    #then the link will send us to a forbidden page that will fail parsing for the hidden "a" tag below.
+                    $hiddenLink = $secondResponse.SelectSingleNode("//a[@class='hidden']")
+
+                    if($null -eq $hiddenLink) {
+                        Write-Warning "Failed to find download link - you likely don't have the correct support level, skipping"
+                    } else {
+                        # extract final HREF
+                        # ex. https://nextgen-aws-salesforce-prod-sdrive-us-east-2.s3.us-east-2.amazonaws.com/a9o4y000000YId9AAG/ldap-3.12.0.b1752.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA2ZO6ZFSFWXJS7NWF%2F20220318%2Fus-east-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20220318T051704Z&amp;X-Amz-Expires=216000&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=962a48d81f6091b86855eb2041df9bd0ba3123479ac87cc860bc061aa82edaff
+                        $extractedHref = $hiddenLink.GetAttributeValue('href', 'missing-href-value-3')
+                        Write-Debug "Found `$hiddenLink with `$extractedHref=$extractedHref"
+
+                        Write-Debug "Decoding `$extractedHref"
+                        # decode this or else the AWS call will fail
+                        [uri]$decodedHref = [System.Web.HttpUtility]::HtmlDecode($extractedHref)
+                        # extract filename
+                        $filename = $decodedHref.Segments[-1]
+
+                        Write-Debug "Downloading plugin '$filename' from $($decodedHref.AbsoluteUri)"
+
+                        Invoke-WebRequest -Uri $decodedHref.AbsoluteUri -OutFile $filename
+                    }
                 }
             }
         }
