@@ -13,13 +13,15 @@ Has the following features
 ## Pre-requisites
 
 1. PS v6+
-2. module _powerhtml_
-3. An active NextGen subscription
+1. module _powerhtml_
+1. module SalesForceLogin
+1. An active NextGen subscription
 
 ## Usage
 
-1. Edit desired plugin version
-2. Edit list of plugins to download (an empty list means all)
-3. Edit $IncludeAttachments toggling the additional download of the plugins' user guides
-4. Edit $1PASS_UUID _or_ override function ObtainCredentials to provide your login creds
-5. Run Scraper.ps1, files will download into current directory
+1. Set desired plugin version
+1. Set list of plugins to download (an empty list means all)
+1. Set Support Level
+1. Set $IncludeAttachments toggling the additional download of the plugins' user guides
+1. Set $1PASS_UUID _or_ override function ObtainCredentials to provide your NextGen login creds
+1. Run Scraper.ps1, files will download into current directory
