@@ -14,7 +14,7 @@ Has the following features
 
 1. PS v6+
 1. module _powerhtml_
-1. module SalesForceLogin
+1. module PSSalesForceLogin
 1. An active NextGen subscription
 
 ## Usage
