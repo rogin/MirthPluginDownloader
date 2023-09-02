@@ -40,7 +40,7 @@ $PluginVersion = "4.4"
 $UserSupportLevel = [SupportLevel]::GOLD
 
 #do you also want to download the plugin's user guide?
-$IncludeAttachments = $false
+$IncludeAttachments = $true
 
 $ErrorActionPreference = 'Stop'
 
@@ -71,18 +71,28 @@ function Get-1PassCredential {
         $UUID
     )
 
-    Invoke-Expression $(op signin)
-    
-    $json = op item get $UUID --fields "username,password" --format json | ConvertFrom-Json
-    
-    op signout
+    Begin {
+        Write-Verbose "$($MyInvocation.MyCommand.Name) BEGIN"
+    }
 
-    $SecurePassword = ConvertTo-SecureString $json[1].value -AsPlainText
-    
-    New-Object System.Management.Automation.PSCredential ($json[0].value, $SecurePassword)
+    Process {
+        Invoke-Expression $(op signin)
+        
+        $json = op item get $UUID --fields "username,password" --format json | ConvertFrom-Json
+        
+        op signout
+
+        $SecurePassword = ConvertTo-SecureString $json[1].value -AsPlainText
+        
+        New-Object System.Management.Automation.PSCredential ($json[0].value, $SecurePassword)
+    }
+
+    End {
+        Write-Verbose "$($MyInvocation.MyCommand.Name) END"
+    }
 }
 
-function Select-PluginLinks {
+function Select-Plugins {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -90,55 +100,51 @@ function Select-PluginLinks {
         $session
     )
 
-    Write-Verbose "Selecting plugin links"
-
-    Write-Debug "Invoking $PluginListUrl"
-    $WebContent = Invoke-WebRequest -Uri $PluginListUrl -WebSession $session | ConvertFrom-Html
-
-    # find the links where the href contains 'articles' as the others link to the Support Levels
-    #$links = $WebContent.SelectNodes("//div[@class='pbBody']//tbody//td//span//a[contains(@href, 'articles')]")
-    #https://stackoverflow.com/questions/3920957/xpath-query-with-descendant-and-descendant-text-predicates
-    $PluginRows = $WebContent.SelectNodes("//div[@class='sfdc_richtext']//tbody//td//span//a[contains(@href, 'articles')]/ancestor::*[self::tr][1]")
-
-    Write-Debug "Found $($PluginRows.Count) plugins"
-
-    $FilteredPluginRows = $PluginRows.Where({
-        $PR = $_
-        $SupportLevelText = $PR.SelectSingleNode("td[2]").InnerText
-        #the first word defines the minimum support level
-        $SupportLevel = $SupportLevelText.Split(" ")[0].ToUpper() -as [SupportLevel]
-        if($null -eq $SupportLevel) {
-            Write-Error "Unable to determine Support Level for '$SupportLevelText'"
-        }
-
-        #Write-Debug "Comparing $UserSupportLevel -ge $SupportLevel"
-        $UserSupportLevel -ge $SupportLevel
-    })
-
-        Write-Debug "Filtered to $($FilteredPluginRows.Count) plugins"
-
-    $links = $FilteredPluginRows.SelectNodes("td[1]//span//a[contains(@href, 'articles')]")
-
-	Write-Debug "Extracted $($links.Count) plugin links"
-
-    #limit plugins to those we want
-    #user can provide an empty list indicating all plugins
-    if ($PluginNames.Count -eq 0) {
-        Write-Debug "Returning all plugins"
-        $links
+    Begin {
+        Write-Verbose "$($MyInvocation.MyCommand.Name) BEGIN"
     }
-    else {
-        @($links | Where-Object -FilterScript { $PluginNames -contains $_.InnerText.Trim() })
+
+    Process {
+        Write-Debug "Invoking $PluginListUrl"
+        $WebContent = Invoke-WebRequest -Uri $PluginListUrl -WebSession $session | ConvertFrom-Html
+
+        # find the links where the href contains 'articles' as the others link to the Support Levels
+        #$links = $WebContent.SelectNodes("//div[@class='pbBody']//tbody//td//span//a[contains(@href, 'articles')]")
+        #https://stackoverflow.com/questions/3920957/xpath-query-with-descendant-and-descendant-text-predicates
+        $PluginRows = $WebContent.SelectNodes("//div[@class='sfdc_richtext']//tbody//td//span//a[contains(@href, 'articles')]/ancestor::*[self::tr][1]")
+
+        Write-Debug "Found $($PluginRows.Count) plugins"
+
+        $PluginRows | ForEach-Object {
+            $Row = $_
+            $SupportLevelText = $Row.SelectSingleNode("td[2]").InnerText
+            #the first word defines the minimum support level
+            $SupportLevel = $SupportLevelText.Split(" ")[0].ToUpper() -as [SupportLevel]
+            if($null -eq $SupportLevel) {
+                Write-Error "Unable to determine Support Level for '$SupportLevelText'"
+            }
+            $Link = $Row.SelectSingleNode("td[1]//span//a[contains(@href, 'articles')]")
+
+            [PSCustomObject]@{
+                Name = $Link.InnerText.Trim()
+                Link = $Link
+                SupportLevel = $SupportLevel
+                SupportLevelText = $SupportLevelText
+            }
+        }
+    }
+
+    End {
+        Write-Verbose "$($MyInvocation.MyCommand.Name) END"
     }
 }
 
 function Read-PluginPage {
     [CmdletBinding()]
     param (
-        # Node containing plugin download link
         [Parameter(Mandatory, ValueFromPipeline)]
-        [HtmlAgilityPack.HtmlNode]
-        $Node,
+        [PSCustomObject]
+        $PluginInfo,
         [Parameter(Mandatory)]
         [Microsoft.PowerShell.Commands.WebRequestSession]
         $session,
@@ -152,18 +158,20 @@ function Read-PluginPage {
     }
 
     Process {
-        Write-Verbose "Processing '$($Node.InnerText)', `$IncludeAttachments=$IncludeAttachments"
+        $PluginName = $PluginInfo.Name
 
-        $href = $Node.GetAttributeValue('href', 'missing-href-value-1')
+        Write-Debug "Processing '$PluginName', `$IncludeAttachments=$IncludeAttachments"
+
+        $href = $PluginInfo.Link.GetAttributeValue('href', 'missing-href-value-1')
 
         if ($href -eq 'missing-href-value-1') {
-            Write-Warning "Could not find href value for $($Node.InnerText) - you likely don't have the correct support level, skipping"
+            Write-Warning "Could not find href value for $PluginName - you likely don't have the correct support level, skipping"
         }
         else {
             #noticed this wall with 'Mirth Results Connector' and 'Health Data Hub Connector'
             #check for nextgenhealthcare.lightning.force.com which redirects to salesforce.com
             if ($href -match 'lightning.force.com') {
-                Write-Warning "Unable to download plugin $($Node.InnerText) as it requires a salesforce.com account, skipping"
+                Write-Warning "Unable to download plugin $PluginName as it requires a salesforce.com account, skipping"
             }
             else {
                 $href = $BaseUrl + $href
@@ -181,10 +189,10 @@ function Read-PluginPage {
                 Write-Verbose "Found $($pluginDownloadLinks.Count) links matching version '$PluginVersion'"
                 
                 if ($pluginDownloadLinks.Count -eq 0) {
-                    Write-Warning "Failed to find version '$PluginVersion' of $($Node.InnerText)"
+                    Write-Warning "Failed to find version '$PluginVersion' of $PluginName"
                 }
                 elseif ($pluginDownloadLinks.Count -gt 1) {
-                    Write-Error "Found $($pluginDownloadLinks.Count) download links for version '$PluginVersion' of $($Node.InnerText), expected 1"
+                    Write-Error "Found $($pluginDownloadLinks.Count) download links for version '$PluginVersion' of $PluginName, expected 1, skipping"
                 }
                 else {
                     $NameAndVersion = $pluginDownloadLinks[0].InnerText.Trim()
@@ -268,7 +276,9 @@ function Start-Scrape {
     [CmdletBinding()]
     param ()
 
-    begin {
+    Begin {
+        Write-Verbose "$($MyInvocation.MyCommand.Name) BEGIN"
+
         $StoredPSDefaultParameterValues = $PSDefaultParameterValues.Clone()
         $StoredProgressPreference = $ProgressPreference
         
@@ -284,18 +294,40 @@ function Start-Scrape {
         $ProgressPreference = 'SilentlyContinue'
     }
 
-    process {
+    Process {
         # this will hold our cookies and be used in (most) web requests
         $session = Get-1PassCredential $1PASS_UUID | Invoke-SFLogin $LoginUrl
 
-        $pluginLinks = Select-PluginLinks $session
+        $AllPlugins = Select-Plugins $session
+
+        Write-Debug "Grouping by SupportLevel=$UserSupportLevel"
+
+        $AcceptedPlugins,$ExcludedPlugins = $AllPlugins.Where({
+            #Write-Debug "Comparing $UserSupportLevel -ge $SupportLevel"
+            $UserSupportLevel -ge $_.SupportLevel
+        }, 'Split')
+
+        Write-Debug ("SupportLevel accepted={0}, filtered={1}. Filtered names: {2}" -f $AcceptedPlugins.Count, $ExcludedPlugins.Count, ($ExcludedPlugins.Name -join ", "))
+
+        Write-Debug "Filtering plugins to those in `$PluginNames"
+
+        #Limit plugins to those listed by the user.
+        #User can provide an empty list indicating all plugins.
+        if ($PluginNames.Count -eq 0) {
+            Write-Debug "`$PluginNames is empty, using all accepted plugins"
+        }
+        else {
+            $AcceptedPlugins = @($AcceptedPlugins | Where-Object -FilterScript { $PluginNames -contains $_.Name })
+        }
         
-        $pluginLinks | Read-PluginPage -session $session -IncludeAttachments:$IncludeAttachments
+        $AcceptedPlugins | Read-PluginPage -session $session -IncludeAttachments:$IncludeAttachments
     }
 
-    end {
+    End {
         $PSDefaultParameterValues = $StoredPSDefaultParameterValues
         $ProgressPreference = $StoredProgressPreference
+
+        Write-Verbose "$($MyInvocation.MyCommand.Name) END"
     }
 }
 
