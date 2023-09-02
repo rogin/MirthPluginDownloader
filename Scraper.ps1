@@ -2,8 +2,8 @@
 #Requires -Modules PowerHTML
 
 Import-Module PowerHTML
-Import-Module SalesForceLogin
-#Import-Module ../SalesForceLogin/SalesForceLogin.psd1 -Force
+Import-Module PSSalesForceLogin
+#Import-Module ../PSSalesForceLogin/PSSalesForceLogin.psd1 -Force
 
 <#
     # List of plugins to download
@@ -115,11 +115,11 @@ function Select-PluginLinks {
         $UserSupportLevel -ge $SupportLevel
     })
 
-    Write-Debug "Filtered to $($FilteredPluginRows.Count) plugins"
+        Write-Debug "Filtered to $($FilteredPluginRows.Count) plugins"
 
     $links = $FilteredPluginRows.SelectNodes("td[1]//span//a[contains(@href, 'articles')]")
 
-    Write-Debug "Extracted $($links.Count) plugin links"
+	Write-Debug "Extracted $($links.Count) plugin links"
 
     #limit plugins to those we want
     #user can provide an empty list indicating all plugins
